@@ -8,18 +8,212 @@ output:
 
 ## Loading and preprocessing the data
 
+The data was downloaded using the following code 
+```{r}
+activity_data <- read.csv("C://Users/Tamir/Documents/data/activity.csv")
+```
+This meet the requirement in the guidelines to include:
+1.**Code for reading in the dataset and/or processing the data**
+The dataset was tenatatively observed using the following steps.
 
+* First, its class was checked using R command class()
+```{r datasetclass, echo=TRUE}
+class(activity_data)
+```
+
+* Second, its structure was checked using R command str()
+```{r datasetstructure, echo=TRUE}
+str(activity_data)
+```
+
+* Third, descriptive statistics of the dataset were obtained using R command summary()
+```{r summarystatistics}
+summary(activity_data)
+```
+
+The following R packages were loaded and used throughout the analysis
+```{r packages, echo=TRUE}
+library(dplyr)
+library(ggplot2)
+library(chron)
+library(lubridate)
+library(mice)
+library(VIM)
+library(Biobase)
+library(matrixStats)
+library(miscTools)
+library(timeDate)
+```
+
+##Full submission of "Peer-Graded Assignment: Course Project 1"
+The presentation of the tasks included in the assingment follows the nine items, which were stated in the guidelines as constituting full submission. They are stated below in **bold**. They are grouped in relation to the four questions that the assingment has to answer. Those questions are quoted and are provided as headers for the related items.
 
 ## What is mean total number of steps taken per day?
 
+2.**Histogram of the total number of steps taken each day**
 
+The first step in answering this question was to calculate the number of steps per day
+```{r firsthistogram, echo=TRUE}
+sum_steps_day <- activity_data %>%
+  group_by(date) %>%
+  summarise(sum = sum(steps))
+```
+Next, the Converting 'date' variable was converted from factor class to POSIXct class to enable polotting in ggplot2
+```{r datetoposixct, echo=TRUE}
+ sum_steps_day$date <- as.POSIXct(sum_steps_day$date)
+```
+Finally, the histagram was plotted using R package ggplot
+```{r histogram, echo=TRUE}
+ggplot(sum_steps_day, aes(x = sum)) + geom_histogram(color='dark blue', na.rm = TRUE) + 
+    xlab("Sum of steps per day") +
+  ylab("Number of days")+ggtitle("Histogram of the total number of steps taken each day")
+```
+
+3.**Mean and median number of steps taken each day**
+
+The mean and the median number of steps taken per day were claculated using the following code
+```{r meanandmedia, echo=TRUE}
+summary(sum_steps_day$sum)
+```
+
+Therefore, the mean is 10766 steps per day and the median is 10765 per day.
 
 ## What is the average daily activity pattern?
 
+4.**Time series plot of the average number of steps taken**
 
+In order to meet the requirement of this item, the following steps were taken. First the number of steps across all days per interval as counted using the following code.
+```{r stepsacrossdays, echo=TRUE}
+number_steps_interval <- activity_data %>%
+  group_by(interval) %>%
+  summarize(sum(steps, na.rm = TRUE))
+```
+Next, the columnes' names of the subest 'number_steps_interval' were changed to make it easier to conduct the analysis. The change was made using the follwing code.
+```{r colnames, echo=TRUE}
+colnames(number_steps_interval) <- c("interval", "sum")
+```
+Third, the mumber of days, or length of the period covered by the dataset was calaculated.This was done in two steps. First, R object 'days' was created from the 'date' variable of the dataset 'sum_steps_day'
+```{r days, echo=TRUE}
+days <- day(sum_steps_day$date)
+```
+Second, the number of days or length of period was calaculated usng the R command length()
+```{r length, echo=TRUE}
+length(days)
+```
+Next, the total number of steps taken across all days per interval was divided by the total number of days in order to calculate the average number of steps taken, averaged across all days. 
+```{r dividing, echo=TRUE}
+number_steps_interval2 <- number_steps_interval
+number_steps_interval2$sum <- number_steps_interval$sum/61
+```
+Finally, time series of the average number of steps taken is plotted
+```{r timeseries1, echo=TRUE}
+plot(number_steps_interval2$interval, number_steps_interval2$sum, type = "l", 
+     ra.nm = "TRUE", xlab = "Intervals", 
+     ylab = "Average number of steps", main = "Average number of steps per interval")
+```
+
+5.**The 5-minute interval that, on average, contains the maximum number of steps**
+The objective of item five is achieving through the following code.
+```{r maxinterval, echo=TRUE}
+max_interval <- arrange(number_steps_interval2, desc(sum))
+print(max_interval)                                                   
+```
+
+The five minutes interval that, on average, contain the maximum number of steps is interval 835. It contains on average 179.
 
 ## Imputing missing values
 
+6.**Code to describe and show a strategy for imputing missing data**
+The following step were taken in order to meet the objective of this item. First, the total number of missing values for variable 'steps' of the dataset 'activity_data' was calculated. It was done throught the following code.
+```{r totalnas, echo=TRUE}
+na_steps <- sum(is.na(activity_data$steps))
+```
+Second, the proportion of NAs out of the total number of observations of the variable 'steps' was calculated. This was done by dividing the latter by the former.
+```{r dividing2, echo=TRUE}
+na_ratio <- 17568/2304
+print(na_ratio)
+```
+Therefore, the proprton of NAs out of the total number of observation for the variable 'steps' is 7.65%. Third, this finding was verified using MICE package that provides overview of NAs.
+```{r MICE, echo=TRUE}
+na_overview <- md.pattern(activity_data)
+print(na_overview)
+```
+Indeed, 2304 rows lacks values for 'steps' variable. It is also verified using the R VIME package through the following code.
+```{r VIME, echo=TRUE}
+aggr_plot <- aggr(activity_data, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, 
+                  labels=names(activity_data), cex.axis=.7, gap=3, 
+                  ylab=c("Histogram of missing data","Pattern"))
+print(aggr_plot)
+```
 
+The missing values are imputed using a relatively new, specialised R MICE package. The package offers several methods for imputing missing values. The one selected is predictive mean matching (reflected in the 'method' argument). The reason is that it is: "attractive way to do multiple imputation for missing data, especially for imputing quantitative variables that are not normally distributed" as explained by Paul Allisson [Paul Allisson](https://statisticalhorizons.com/predictive-mean-matching).
+
+```{r mice, echo=TRUE}
+imputed_activity_data <- mice(activity_data, m = 5, meth = "pmm")
+complete_imputed_activity_data <- complete(imputed_activity_data, 1)
+```
+Next, it was verified that the imputing method was indeed prdictive mean matching and the first ten rows of the imputed dataset were observed.
+```{r imputeddataset, echo=TRUE}
+imputed_activity_data$meth
+head(complete_imputed_activity_data, 10)
+```
+7.**Histogram of the total number of steps taken each day after missing values are imputed**
+First, the total number of steps taken each day after missing values are imputed.
+```{r imputed_sum_step, echo=TRUE}
+complete_imputed_activity_data_sum_steps_day <- complete_imputed_activity_data %>%
+  group_by(date) %>%
+  summarise(sum = sum(steps))
+```
+The following code produces using R package ggplot2 histogram of the total number of steps taken each day after missing values are imputed.
+```{r imputedhistogram, echo=TRUE}
+ggplot(complete_imputed_activity_data_sum_steps_day, aes(x = sum)) + geom_histogram(color='dark blue', na.rm = TRUE) + 
+  xlab("Sum of steps per day") +
+  ylab("Number of days")+ggtitle("Histogram of the total number of steps taken each day")
+
+```
+Finally, the median and mean of the total number of steps per day are calculated and reported.
+```{r imputeddescriptivestatistics, echo=TRUE}
+summary(complete_imputed_activity_data_sum_steps_day$sum)
+```
+Accordingly, the mean is 10527 steps per day and the median is 10571 per day.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+8.**Panel plot comparing the average number of steps taken per 5-minute interval across weekdays and weekends**
+The first step in meeting the objective of this item is to create a new factor variable in the dataset with two levels - 0 ("weekday") and 1 ("weekend") - indicating wether a given date is a weekday or weekend day.
+This is done throught the following code.
+
+```{r dateday, echo=TRUE}
+complete_imputed_activity_data$classifyday <-  ifelse(as.POSIXlt(complete_imputed_activity_data$date)$wday %in% c(0,6), 'Weekend', 'Weekday')
+```
+The following code is used to observe the results.
+```{r validatedateday, echo=TRUE}
+head(complete_imputed_activity_data, 10)
+```
+Next, the data is grouped by five minutes interval and the average number of steps in that interval is summarised. 
+```{r intervalsummarise, echo=TRUE}
+classification_average <- complete_imputed_activity_data %>%
+  group_by(classifyday, interval) %>%
+  summarise(average_steps=mean(steps))
+```
+Finally, using ggplot2 is conducted concerning the average weekday steps versus average weekend steps.
+```{r plottingquestionfour, echo=TRUE}
+qplot(interval, average_steps, data=classification_average,
+      type="l",
+      geom="line",
+      xlab="Interval",
+      ylab="Number of Steps (Average)",
+      main="Average steps taken Weekends vs. Weekdays",
+      facets =classifyday ~ .)
+```
+
+
+
+All the steps above were taken in order to meet the last item required for full submission:
+
+9.**All of the R code needed to reproduce the results (numbers, plots, etc.) in the report**
+
+This also required to provide a documentation of the software envirounment within which the analysis above was conducted. It documented using R base command sessionInfo()
+```{r sessonInfo, echo=TRUE}
+sessionInfo()
+```
